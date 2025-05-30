@@ -3,6 +3,9 @@
 use pyo3::prelude::*;
 use std::fs::File;
 use std::io::Read;
+use std::io::Cursor;
+use hex;
+use ark_serialize::{CanonicalSerialize, CanonicalDeserialize};
 
 /* ------------------------------------------------------------------ */
 /*   Ark-VRF concrete suite aliases                                    */
@@ -107,46 +110,51 @@ struct PublicKey {
 
 #[pymethods]
 impl PublicKey {
-    #[pyo3(signature = (input, output, proof, aux = None))]
-    fn verify_ietf(
-        &self,
-        input: &VRFInput,
-        output: &VRFOutput,
-        proof: &IETFProof,
-        aux: Option<&[u8]>,
-    ) -> bool {
-        IetfVerifier::verify(
-            &self.inner,
-            input.inner.clone(),
-            output.inner.clone(),
-            aux.unwrap_or(&[]),
-            &proof.inner,
-        )
-        .is_ok()
+    #[new]
+    fn new(public_key_bytes: &[u8]) -> PyResult<Self> {
+        let inner = PublicRust::deserialize_compressed(&mut Cursor::new(public_key_bytes))
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?;
+        Ok(Self { inner })
     }
 
-    #[pyo3(signature = (input, output, proof, aux = None))]
-    fn verify_pedersen(
-        &self,
-        input: &VRFInput,
-        output: &VRFOutput,
-        proof: &PedersenProof,
-        aux: Option<&[u8]>,
-    ) -> bool {
-        <PublicRust as PedVerifier<Suite>>::verify(
-            input.inner.clone(),
-            output.inner.clone(),
-            aux.unwrap_or(&[]),
-            &proof.inner,
-        )
-        .is_ok()
+    #[staticmethod]
+    fn from_hex(hex_str: &str) -> PyResult<Self> {
+        let bytes = hex::decode(hex_str)
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Invalid hex: {}", e)))?;
+        Self::new(&bytes)
     }
 
-    #[pyo3(signature = (input, output, proof, ring, aux = None))]
-    fn verify_ring(&self, input: &VRFInput, output: &VRFOutput, proof: &RingProof, ring: Vec<PublicKey>, aux: Option<&[u8]>) -> bool {
-        let ring_inner: Vec<_> = ring.iter().map(|pk| pk.inner.0.clone()).collect();
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut buf = Vec::new();
+        self.inner.serialize_compressed(&mut buf).unwrap();
+        buf
+    }
+
+    #[staticmethod]
+    fn get_ring_commitment_bytes(public_keys_bytes: Vec<Vec<u8>>) -> PyResult<Vec<u8>> {
+        // Convert bytes to PublicKey objects
+        let public_keys: Vec<PublicKey> = public_keys_bytes
+            .into_iter()
+            .map(|bytes| PublicKey::new(&bytes))
+            .collect::<PyResult<Vec<_>>>()?;
+
+        // Get the first public key to use for commitment generation
+        let first_pk = public_keys.first()
+            .ok_or_else(|| PyErr::new::<pyo3::exceptions::PyValueError, _>("No public keys provided"))?;
+
+        // Generate ring commitment
+        let ring_inner: Vec<_> = public_keys.iter().map(|pk| pk.inner.0.clone()).collect();
         let params = load_ring_params(ring_inner.len());
         let verifier_key = params.verifier_key(&ring_inner);
+        let commitment = RingCommitment { inner: verifier_key.commitment() };
+        
+        // Convert commitment to bytes
+        Ok(commitment.to_bytes())
+    }
+
+    fn verify_ring_with_commitment(&self, input: &VRFInput, output: &VRFOutput, proof: &RingProof, commitment: &RingCommitment, aux: Option<&[u8]>) -> bool {
+        let params = load_ring_params(1); // Size doesn't matter for commitment verification
+        let verifier_key = params.verifier_key_from_commitment(commitment.inner.clone());
         let verifier = params.verifier(verifier_key);
         <PublicRust as ring::Verifier<Suite>>::verify(
             input.inner.clone(),
@@ -157,16 +165,38 @@ impl PublicKey {
         ).is_ok()
     }
 
-    fn get_ring_commitment(&self, ring: Vec<PublicKey>) -> PyResult<RingCommitment> {
+    fn verify_ring_with_commitment_bytes(
+        &self,
+        input_bytes: &[u8],
+        output_bytes: &[u8],
+        proof_bytes: &[u8],
+        commitment_bytes: &[u8],
+        aux: Option<&[u8]>
+    ) -> PyResult<bool> {
+        // Convert input bytes to VRFInput
+        let input = VRFInput::new(input_bytes)?;
+        
+        // Convert output bytes to VRFOutput
+        let output = VRFOutput { 
+            inner: OutputRust::deserialize_compressed(&mut Cursor::new(output_bytes))
+                .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(e.to_string()))?
+        };
+        
+        // Convert proof bytes to RingProof
+        let proof = RingProof::from_bytes(proof_bytes, output.clone())?;
+        
+        // Convert commitment bytes to RingCommitment
+        let commitment = RingCommitment::from_bytes(commitment_bytes)?;
+        
+        // Verify the proof
+        Ok(self.verify_ring_with_commitment(&input, &output, &proof, &commitment, aux))
+    }
+
+    #[pyo3(signature = (input, output, proof, ring, aux = None))]
+    fn verify_ring(&self, input: &VRFInput, output: &VRFOutput, proof: &RingProof, ring: Vec<PublicKey>, aux: Option<&[u8]>) -> bool {
         let ring_inner: Vec<_> = ring.iter().map(|pk| pk.inner.0.clone()).collect();
         let params = load_ring_params(ring_inner.len());
         let verifier_key = params.verifier_key(&ring_inner);
-        Ok(RingCommitment { inner: verifier_key.commitment() })
-    }
-
-    fn verify_ring_with_commitment(&self, input: &VRFInput, output: &VRFOutput, proof: &RingProof, commitment: &RingCommitment, aux: Option<&[u8]>) -> bool {
-        let params = load_ring_params(1); // Size doesn't matter for commitment verification
-        let verifier_key = params.verifier_key_from_commitment(commitment.inner.clone());
         let verifier = params.verifier(verifier_key);
         <PublicRust as ring::Verifier<Suite>>::verify(
             input.inner.clone(),
@@ -255,7 +285,6 @@ fn load_ring_params(ring_size: usize) -> ring::RingProofParams<Suite> {
     let mut file = File::open(srs_path).expect("SRS file not found");
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).expect("Failed to read SRS file");
-    use ark_serialize::CanonicalDeserialize;
     let pcs_params = ring::PcsParams::<Suite>::deserialize_uncompressed_unchecked(&mut &buf[..])
         .expect("Failed to deserialize SRS");
     ring::RingProofParams::from_pcs_params(ring_size, pcs_params).expect("Invalid SRS params")
@@ -277,7 +306,6 @@ fn py_ark_vrf(_py: Python<'_>, m: &Bound<PyModule>) -> PyResult<()> {
 #[pymethods]
 impl RingProof {
     fn to_bytes(&self) -> Vec<u8> {
-        use ark_serialize::CanonicalSerialize;
         let mut buf = Vec::new();
         self.inner.serialize_compressed(&mut buf).unwrap();
         buf
@@ -285,7 +313,6 @@ impl RingProof {
 
     #[staticmethod]
     fn from_bytes(data: &[u8], output: VRFOutput) -> PyResult<Self> {
-        use ark_serialize::CanonicalDeserialize;
         let inner = RingProofRust::deserialize_compressed(data)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Deserialization error: {e}")))?;
         Ok(RingProof { inner, output })
@@ -295,7 +322,6 @@ impl RingProof {
 #[pymethods]
 impl RingCommitment {
     fn to_bytes(&self) -> Vec<u8> {
-        use ark_serialize::CanonicalSerialize;
         let mut buf = Vec::new();
         self.inner.serialize_compressed(&mut buf).unwrap();
         buf
@@ -303,7 +329,6 @@ impl RingCommitment {
 
     #[staticmethod]
     fn from_bytes(data: &[u8]) -> PyResult<Self> {
-        use ark_serialize::CanonicalDeserialize;
         let inner = ring::RingCommitment::<Suite>::deserialize_compressed(data)
             .map_err(|e| PyErr::new::<pyo3::exceptions::PyValueError, _>(format!("Deserialization error: {e}")))?;
         Ok(RingCommitment { inner })
@@ -313,7 +338,6 @@ impl RingCommitment {
 #[pymethods]
 impl IETFProof {
     fn to_bytes(&self) -> Vec<u8> {
-        use ark_serialize::CanonicalSerialize;
         let mut buf = Vec::new();
         self.inner.serialize_compressed(&mut buf).unwrap();
         buf

@@ -1,6 +1,5 @@
 import py_ark_vrf as vrf
 import os
-import random
 
 def test_basic_vrf():
     # Create a secret key
@@ -84,6 +83,54 @@ def test_ring_vectors():
     # This will require parsing the vector format and using RingProof.from_bytes
     pass
 
+def test_validator_set_ring_commitment():
+    # List of validator public keys in hex format
+    validator_keys = [
+        "0x5e465beb01dbafe160ce8216047f2155dd0569f058afd52dcea601025a8d161d",
+        "0x3d5e5a51aab2b048f8686ecd79712a80e3265a114cc73f14bdb2a59233fb66d0",
+        "0xaa2b95f7572875b0d0f186552ae745ba8222fc0b5bd456554bfe51c68938f8bc",
+        "0x7f6190116d118d643a98878e294ccf62b509e214299931aad8ff9764181a4e33",
+        "0x48e5fcdce10e0b64ec4eebd0d9211c7bac2f27ce54bca6f7776ff6fee86ab3e3",
+        "0xf16e5352840afb47e206b5c89f560f2611835855cf2e6ebad1acc9520a72591d"
+    ]
+    
+    # Convert hex strings to bytes
+    public_keys_bytes = []
+    for key_hex in validator_keys:
+        # Remove '0x' prefix if present
+        key_hex = key_hex[2:] if key_hex.startswith('0x') else key_hex
+        # Convert hex to bytes
+        key_bytes = bytes.fromhex(key_hex)
+        public_keys_bytes.append(key_bytes)
+    
+    # Generate ring commitment using bytes
+    commitment_bytes = vrf.PublicKey.get_ring_commitment_bytes(public_keys_bytes)
+    
+    # Print the commitment in hex format
+    print(f"Ring commitment: 0x{commitment_bytes.hex()}")
+    
+    # Verify the commitment can be used for verification
+    # Create a test input and secret key
+    sk = vrf.SecretKey(b"test_seed")
+    test_input = vrf.VRFInput(b"test_input")
+    
+    # Generate a ring proof
+    ring_proof = sk.prove_ring(test_input, [vrf.PublicKey(bytes) for bytes in public_keys_bytes])
+    
+    # Convert objects to bytes for verification
+    input_bytes = test_input.inner.serialize_compressed()
+    output_bytes = ring_proof.output.inner.serialize_compressed()
+    proof_bytes = ring_proof.to_bytes()
+    
+    # Verify using the commitment bytes
+    is_valid = vrf.PublicKey(public_keys_bytes[0]).verify_ring_with_commitment_bytes(
+        input_bytes,
+        output_bytes,
+        proof_bytes,
+        commitment_bytes
+    )
+    print(f"Verification with commitment: {is_valid}")
+
 if __name__ == "__main__":
     # Ensure SRS file exists
     if not os.path.exists("bandersnatch_ring.srs"):
@@ -92,7 +139,7 @@ if __name__ == "__main__":
         
     # Run tests
     test_basic_vrf()
-    test_deterministic_vrf()
-    test_ring_proof()
-    # test_ring_vectors()
+    # test_deterministic_vrf()
+    # test_ring_proof()
+    test_validator_set_ring_commitment()
     print("All tests passed!")
