@@ -230,14 +230,22 @@ use pyo3::Bound;
 use pyo3::types::PyModule;
 
 fn load_ring_params(ring_size: usize) -> ring::RingProofParams<Suite> {
-    // Always load SRS from a fixed file for deterministic tests
-    let srs_path = "bandersnatch_ring.srs";
-    let mut file = File::open(srs_path).expect("SRS file not found");
+    let srs_path = get_srs_file_path().unwrap_or_else(|_| "bandersnatch_ring.srs".to_string());
+    let mut file = File::open(&srs_path).expect("SRS file not found");
     let mut buf = Vec::new();
     file.read_to_end(&mut buf).expect("Failed to read SRS file");
     let pcs_params = ring::PcsParams::<Suite>::deserialize_uncompressed_unchecked(&mut &buf[..])
         .expect("Failed to deserialize SRS");
     ring::RingProofParams::from_pcs_params(ring_size, pcs_params).expect("Invalid SRS params")
+}
+
+fn get_srs_file_path() -> PyResult<String> {
+    Python::with_gil(|py| {
+        let py_ark_vrf = py.import("py_ark_vrf")?;
+        let get_srs_path = py_ark_vrf.getattr("get_srs_file_path")?;
+        let path = get_srs_path.call0()?;
+        Ok(path.extract::<String>()?)
+    })
 }
 
 #[pymodule]

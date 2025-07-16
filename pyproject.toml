@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "py_ark_vrf"
-version = "0.2.1"
+version = "0.2.3"
 description = "Python bindings for ark-vrf"
 authors = [
     { name = "Prasad", email = "prasad@chainscore.finance" },
@@ -15,3 +15,7 @@ requires-python = ">=3.8"
 [project.urls]
 "Homepage" = "https://github.com/chainscore/py-ark-vrf"
 "Bug Tracker" = "https://github.com/chainscore/py-ark-vrf/issues"
+
+[tool.maturin]
+python-source = "."
+include = ["py_ark_vrf/bandersnatch_ring.srs", "py_ark_vrf/__init__.pyi", "py_ark_vrf/py.typed"]

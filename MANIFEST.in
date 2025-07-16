@@ -1,0 +1,4 @@
+include py_ark_vrf/bandersnatch_ring.srs
+include py_ark_vrf/*.srs
+include py_ark_vrf/*.pyi
+include py_ark_vrf/py.typed 

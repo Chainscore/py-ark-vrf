@@ -2,7 +2,11 @@
 
 Python bindings for the [`ark-vrf`](https://github.com/w3f/ark-vrf) Rust crate, offering Verifiable Random Function (VRF) constructions. This library specifically uses the Bandersnatch curve (`suite::BandersnatchSha512Ell2`) and exposes IETF and Ring VRF schemes.
 
-This library requires a pre-generated SRS file `bandersnatch_ring.srs` for Ring VRF operations.
+This library requires a pre-generated SRS file `bandersnatch_ring.srs` for Ring VRF operations. The SRS file is automatically included in the package distribution and will be extracted when needed.
+
+## Type Checking Support
+
+This package includes type stubs (`.pyi` files) and supports static type checking with tools like mypy, PyCharm, and VS Code. The package is marked with `py.typed` to indicate type checking support.
 
 ## Installation
 
@@ -75,7 +79,7 @@ print(f"VRF Output: {output.hex()}")
 
 Ring VRFs allow proving that a secret key holder is part of a "ring" (a set of public keys) without revealing which one.
 
-**Note:** Ring VRF operations require a Structured Reference String (SRS) file named `bandersnatch_ring.srs` to be present in the working directory.
+**Note:** Ring VRF operations require a Structured Reference String (SRS) file. The SRS file is automatically included in the package and will be extracted when needed. No manual setup is required.
 
 ```python
 from py_ark_vrf import secret_from_seed, prove_ring, verify_ring
