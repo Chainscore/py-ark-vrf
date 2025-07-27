@@ -1,6 +1,10 @@
 # `py-ark-vrf`
 
-Python bindings for the [`ark-vrf`](https://github.com/w3f/ark-vrf) Rust crate, offering Verifiable Random Function (VRF) constructions. This library specifically uses the Bandersnatch curve (`suite::BandersnatchSha512Ell2`) and exposes IETF and Ring VRF schemes.
+Python bindings for the [`ark-vrf`](https://github.com/w3f/ark-vrf) Rust crate, offering Verifiable Random Function (VRF) constructions. This library specifically uses the Bandersnatch curve (`suite::BandersnatchSha512Ell2`) and exposes three VRF schemes:
+
+- **IETF VRF**: Standard VRF scheme following IETF specifications
+- **Pedersen VRF**: Key-hiding VRF where the public key is not revealed during verification  
+- **Ring VRF**: Anonymous VRF allowing proof of membership in a ring without revealing identity
 
 This library requires a pre-generated SRS file `bandersnatch_ring.srs` for Ring VRF operations. The SRS file is automatically included in the package distribution and will be extracted when needed.
 
@@ -10,16 +14,22 @@ This package includes type stubs (`.pyi` files) and supports static type checkin
 
 ## Installation
 
-This project is built using `setuptools-rust`, so you will need the Rust toolchain installed.
+This package supports all major development platforms:
+- **Linux** (x86_64, aarch64)
+- **macOS** (Intel & Apple Silicon)  
+- **Windows** (x64)
 
+Install from PyPI:
+```bash
+pip install py-ark-vrf
+```
+
+Or build from source (requires Rust toolchain):
 ```bash
 # Install Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
 
-After installing Rust, you can install the library using pip:
-
-```bash
+# Build and install
 pip install .
 ```
 
@@ -75,6 +85,37 @@ assert len(output) == 32
 print(f"VRF Output: {output.hex()}")
 ```
 
+### Pedersen VRF
+
+Pedersen VRFs provide a key-hiding VRF construction where the public key is not revealed during verification. This can be useful in privacy-preserving applications where you want to verify randomness without exposing identity.
+
+```python
+from py_ark_vrf import secret_from_seed, prove_pedersen, verify_pedersen, vrf_output
+
+# 1. Key Generation
+seed = 0
+pub_key, scalar = secret_from_seed(seed.to_bytes(32))
+
+# 2. Proving (no public key needed)
+input_data = b"hello"
+ad = b"additional data"
+proof = prove_pedersen(scalar, input_data, ad)
+
+assert len(proof) == 192  # 32 bytes output + 160 bytes proof
+
+# 3. Verification (no public key needed - key-hiding!)
+is_valid = verify_pedersen(input_data, proof, ad)
+assert is_valid
+
+# An invalid proof should fail verification
+assert not verify_pedersen(input_data, bytes(192), ad)
+
+# 4. Get VRF output hash
+output = vrf_output(proof)
+assert len(output) == 32
+print(f"VRF Output: {output.hex()}")
+```
+
 ### Ring VRF
 
 Ring VRFs allow proving that a secret key holder is part of a "ring" (a set of public keys) without revealing which one.
@@ -120,6 +161,12 @@ Creates an IETF VRF proof. Returns a 96-byte proof.
 
 #### `verify_ietf(public_key: bytes, proof: bytes, input_data: bytes, aux_data: bytes) -> bool`
 Verifies an IETF VRF proof.
+
+#### `prove_pedersen(secret_scalar: bytes, input_data: bytes, aux_data: bytes) -> bytes`
+Creates a Pedersen VRF proof. Returns a 192-byte proof (32 bytes output + 160 bytes proof). Key-hiding - no public key is revealed.
+
+#### `verify_pedersen(input_data: bytes, proof: bytes, aux_data: bytes) -> bool`
+Verifies a Pedersen VRF proof. Key-hiding - no public key is required for verification.
 
 #### `prove_ring(secret_scalar: bytes, input_data: bytes, ring: list[bytes], aux_data: bytes) -> bytes`
 Creates a Ring VRF proof. The prover's public key must be in the `ring`.

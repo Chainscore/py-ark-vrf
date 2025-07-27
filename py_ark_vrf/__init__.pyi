@@ -51,6 +51,32 @@ def verify_ietf(pub_key: bytes, proof: bytes, input_data: bytes, aux: bytes) -> 
     """
     ...
 
+def prove_pedersen(secret_scalar_le: bytes, input_data: bytes, aux: bytes) -> bytes:
+    """Generate a Pedersen VRF proof.
+    
+    Args:
+        secret_scalar_le: The secret scalar in little-endian bytes
+        input_data: The input data for the VRF
+        aux: Auxiliary data
+        
+    Returns:
+        The Pedersen VRF proof bytes (output + proof concatenated)
+    """
+    ...
+
+def verify_pedersen(input_data: bytes, proof: bytes, aux: bytes) -> bool:
+    """Verify a Pedersen VRF proof.
+    
+    Args:
+        input_data: The input data for the VRF
+        proof: The Pedersen VRF proof bytes (output + proof concatenated)
+        aux: Auxiliary data
+        
+    Returns:
+        True if the proof is valid, False otherwise
+    """
+    ...
+
 def prove_ring(secret_scalar: bytes, input_data: bytes, ring: List[bytes], aux: bytes) -> bytes:
     """Generate a ring VRF proof.
     

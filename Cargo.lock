@@ -254,8 +254,6 @@ dependencies = [
 [[package]]
 name = "ark-vrf"
 version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9501da18569b2afe0eb934fb7afd5a247d238b94116155af4dd068f319adfe6d"
 dependencies = [
  "ark-bls12-381",
  "ark-ec",
@@ -1800,7 +1798,7 @@ dependencies = [
 
 [[package]]
 name = "py_ark_vrf"
-version = "0.1.0"
+version = "0.3.0"
 dependencies = [
  "ark-serialize",
  "ark-std",

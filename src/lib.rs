@@ -18,10 +18,10 @@ use ark_vrf::reexports::ark_ff::PrimeField;
 use ark_vrf::ietf::{self, Prover as IetfProver, Verifier as IetfVerifier};
 type IetfProof = ietf::Proof<Suite>;
 
-use ark_vrf::pedersen::{self as ped, Prover as PedProver, Verifier as PedVerifier};
+use ark_vrf::pedersen::{self as ped, Prover as PedersenProver, Verifier as PedersenVerifier};
 type PedersenProof = ped::Proof<Suite>;
 
-use ark_vrf::ring::{self, Prover as RingProver, Verifier as RingVerifier};
+use ark_vrf::ring::{self, Prover as RingProverTrait, Verifier as RingVerifier};
 type RingProof = ring::Proof<Suite>;
 type RingProofParams = ring::RingProofParams<Suite>;
 
@@ -106,19 +106,55 @@ fn verify_ietf(
 
 
 /* === Pedersen === */
-    // #[pyo3(signature = (input, aux = None))]
-    // fn prove_pedersen(&self, input: &VRFInput, aux: Option<&[u8]>) -> PyResult<PedersenProof> {
-    //     let output_pt = self.inner.output(input.inner.clone());
-    //
-    //     let (proof, _) = PedProver::prove(
-    //         &self.inner,
-    //         input.inner.clone(),
-    //         output_pt.clone(),
-    //         aux.unwrap_or(&[]),
-    //     );
-    //
-    //     Ok(PedersenProof { inner: proof, output: VRFOutput { inner: output_pt } })
-    // }
+#[pyfunction]
+fn prove_pedersen(
+    secret_scalar_le: &[u8], 
+    input_data: &[u8], 
+    aux: &[u8]
+) -> PyResult<Vec<u8>> {
+    let secret = Secret::from_scalar(ScalarField::from_le_bytes_mod_order(secret_scalar_le));
+    let input: Input = Input::new(input_data).unwrap();
+    let output_pt = secret.output(input);
+
+    let (proof, _blinding) = <Secret as PedersenProver<Suite>>::prove(
+        &secret,
+        input.clone(),
+        output_pt.clone(),
+        aux,
+    );
+
+    let mut proof_bytes = vec![];
+    let _ = proof.serialize_compressed(&mut proof_bytes);
+    let mut output_pt_bytes = vec![];
+    let _ = output_pt.serialize_compressed(&mut output_pt_bytes);
+
+    Ok([output_pt_bytes, proof_bytes].concat())
+}
+
+#[pyfunction]
+fn verify_pedersen(
+    input_data: &[u8],
+    proof: &[u8],
+    aux: &[u8]
+) -> PyResult<bool> {
+    let output = match AffinePoint::deserialize_compressed(&proof[..32]) {
+        Ok(p) => Output::from(p.into()),
+        Err(_) => return Ok(false),
+    };
+    let input = match Input::new(input_data) {
+        Some(i) => i,
+        None => return Ok(false),
+    };
+    let proof_obj = match PedersenProof::deserialize_compressed(&proof[32..]) {
+        Ok(p) => p,
+        Err(_) => return Ok(false),
+    };
+
+    match <Public as PedersenVerifier<Suite>>::verify(input, output, aux, &proof_obj) {
+        Ok(_) => Ok(true),
+        Err(_) => Ok(false),
+    }
+}
 
 
 #[pyfunction]
@@ -146,8 +182,8 @@ fn prove_ring(
     let prover = params.prover(prover_key, idx);
     let output_pt = secret.output(input.clone());
 
-    let proof = RingProver::prove(
-        &secret, 
+    let proof = <Secret as RingProverTrait<Suite>>::prove(
+        &secret,
         input.clone(), 
         output_pt.clone(), 
         aux, 
@@ -255,6 +291,8 @@ fn py_ark_vrf(_py: Python<'_>, m: &Bound<PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(get_ring_root, m)?)?;
     m.add_function(wrap_pyfunction!(prove_ietf, m)?)?;
     m.add_function(wrap_pyfunction!(verify_ietf, m)?)?;
+    m.add_function(wrap_pyfunction!(prove_pedersen, m)?)?;
+    m.add_function(wrap_pyfunction!(verify_pedersen, m)?)?;
     m.add_function(wrap_pyfunction!(prove_ring, m)?)?;
     m.add_function(wrap_pyfunction!(verify_ring, m)?)?;
     m.add_function(wrap_pyfunction!(vrf_output, m)?)?;

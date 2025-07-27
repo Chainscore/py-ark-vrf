@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "py_ark_vrf"
-version = "0.2.3"
+version = "0.3.0"
 description = "Python bindings for ark-vrf"
 authors = [
     { name = "Prasad", email = "prasad@chainscore.finance" },

@@ -32,15 +32,17 @@ def test_ietf(seed: int, input: bytes, ad: bytes):
     # vrf output
     assert len(vrf_output(proof)) == 32
 
-# FIX: Uses system randomness
-# @pytest.mark.parametrize("seeds,index,input,ad", [
-#     ([1,2,3,4,5,6], 1, b"hello", b"")
-# ])
-# def test_ring_proof(seeds: list[int], index: int, input: str, ad: str):
-#     keys = [secret_from_seed(seed.to_bytes(32)) for seed in seeds]
-#     ring = [k[0] for k in keys]
-#     proof = prove_ring(keys[index][1], input, ring, ad)
-#     print("proof", proof)
+@pytest.mark.parametrize("seeds,index,input,ad", [
+    ([1,2,3,4,5,6], 1, b"hello", b"")
+])
+def test_ring_proof(seeds: list[int], index: int, input: bytes, ad: bytes):
+    keys = [secret_from_seed(seed.to_bytes(32)) for seed in seeds]
+    ring = [k[0] for k in keys]
+    proof = prove_ring(keys[index][1], input, ring, ad)
+    print("proof", proof)
+    assert len(proof) > 0
+    # Test verification
+    assert verify_ring(input, proof, ring, ad)
 
 
 def test_ring_verify():
