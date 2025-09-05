@@ -85,10 +85,10 @@ fn verify_ietf(
         Ok(p) => Public::from(p.into()),
         Err(_) => return Ok(false),
     };
-    let output = match AffinePoint::deserialize_compressed(&proof[..32]) {
-        Ok(p) => Output::from(p.into()),
-        Err(_) => return Ok(false),
-    };
+    let output = Output::from(
+        AffinePoint::deserialize_compressed(&proof[..32])
+            .unwrap_or_else(|_| RingProofParams::padding_point())
+    );
     let input = match Input::new(input_data) {
         Some(i) => i,
         None => return Ok(false),
@@ -201,7 +201,10 @@ fn prove_ring(
 
 #[pyfunction]
 fn vrf_output(proof: &[u8]) -> PyResult<Vec<u8>> {
-    let output_pt = Output::from(AffinePoint::deserialize_compressed(&proof[..32]).unwrap());
+    let output_pt = Output::from(
+        AffinePoint::deserialize_compressed(&proof[..32])
+            .unwrap_or_else(|_| RingProofParams::padding_point())
+    );
     return Ok(output_pt.hash()[..32].to_vec())
 }
 
@@ -213,10 +216,10 @@ fn verify_ring(
     aux: &[u8]
 ) -> PyResult<bool> {
     let input = Input::new(input_data).unwrap();
-    let output = match AffinePoint::deserialize_compressed(&proof[..32]) {
-        Ok(p) => Output::from(p.into()),
-        Err(_) => return Ok(false),
-    };
+    let output = Output::from(
+        AffinePoint::deserialize_compressed(&proof[..32])
+            .unwrap_or_else(|_| RingProofParams::padding_point())
+    );
     let pks: Vec<AffinePoint> = ring
         .iter()
         .map(|x| AffinePoint::deserialize_compressed(x.as_slice()).unwrap().into())
