@@ -10,7 +10,7 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 ark-vrf = { version = "0.1.0", default-features = false, features = ["bandersnatch", "ring", "test-vectors"] }
-pyo3 = { version = "0.25.0", features = ["extension-module", "auto-initialize"] }
+pyo3 = { version = "0.26.0", features = ["extension-module", "auto-initialize"] }
 ark-std = { version = "0.5.0", features = ["std"] }
 ark-serialize = "0.5.0"
 hex = "0.4.3"
@@ -20,3 +20,15 @@ maturin = "1.8"
 
 [features]
 default = ["pyo3/extension-module"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+overflow-checks = false
+debug-assertions = false
+incremental = false
+
+[profile.release.build-override]
+opt-level = 3

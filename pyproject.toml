@@ -10,7 +10,7 @@ authors = [
     { name = "Prasad", email = "prasad@chainscore.finance" },
 ]
 dependencies = []
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 
 [project.urls]
 "Homepage" = "https://github.com/chainscore/py-ark-vrf"
